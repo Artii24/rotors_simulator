@@ -10,11 +10,10 @@ add_definitions(-std=c++11)
 # We need Gazebo version >= 3.0.0 to generate iris.sdf file
 # (gz sdf ... command needs to be available)
 find_package(gazebo REQUIRED)
-find_package(PythonInterp REQUIRED)
 
 if(${gazebo_VERSION_MAJOR} GREATER 2)
     message(STATUS "Building iris.sdf.")
-    
+
     set(enable_mavlink_interface "true")
     set(enable_ground_truth "false")
     set(enable_logging "false")
@@ -22,12 +21,12 @@ if(${gazebo_VERSION_MAJOR} GREATER 2)
     set(enable_wind "false")
     set(rotors_description_dir "${CMAKE_CURRENT_SOURCE_DIR}/models/rotors_description")
     set(scripts_dir "${CMAKE_CURRENT_SOURCE_DIR}/scripts")
-    
+
     # Creates shell commands to generate .sdf file
     add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/models/iris/iris.sdf
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
       COMMAND rm -f ${CMAKE_CURRENT_SOURCE_DIR}/models/iris/iris.sdf
-      COMMAND ${PYTHON_EXECUTABLE} ${scripts_dir}/xacro.py -o  ${rotors_description_dir}/urdf/iris_base.urdf  ${rotors_description_dir}/urdf/iris_base.xacro enable_mavlink_interface:=${enable_mavlink_interface} enable_ground_truth:=${enable_ground_truth} enable_wind:=${enable_wind} enable_logging:=${enable_logging} rotors_description_dir:=${rotors_description_dir}
+      COMMAND python ${scripts_dir}/xacro.py -o  ${rotors_description_dir}/urdf/iris_base.urdf  ${rotors_description_dir}/urdf/iris_base.xacro enable_mavlink_interface:=${enable_mavlink_interface} enable_ground_truth:=${enable_ground_truth} enable_wind:=${enable_wind} enable_logging:=${enable_logging} rotors_description_dir:=${rotors_description_dir}
       COMMAND gz sdf -p  ${rotors_description_dir}/urdf/iris_base.urdf >> ${CMAKE_CURRENT_SOURCE_DIR}/models/iris/iris.sdf
       COMMAND rm -f ${rotors_description_dir}/urdf/iris_base.urdf
       DEPENDS ${rotors_description_dir}/urdf/iris.xacro
@@ -44,30 +43,46 @@ if(NO_ROS)
   return()
 endif()
 
-find_package(catkin REQUIRED COMPONENTS gazebo_msgs geometry_msgs mav_msgs roscpp sensor_msgs)
 
-catkin_package(
-  CATKIN_DEPENDS
-    gazebo_msgs
-    geometry_msgs
-    mav_msgs
-    roscpp
-    sensor_msgs
+find_package(catkin REQUIRED COMPONENTS
+  gazebo_msgs
+  geometry_msgs
+  mav_msgs
+  nav_msgs
+  roscpp
+  sensor_msgs
+  cmake_modules
 )
 
-include_directories(include ${catkin_INCLUDE_DIRS})
+find_package(
+  Eigen REQUIRED
+)
 
-add_executable(waypoint_publisher src/waypoint_publisher.cpp)
+catkin_package(
+  INCLUDE_DIRS include ${Eigen_INCLUDE_DIRS}
+  LIBRARIES spline_trajectory_generator
+  CATKIN_DEPENDS geometry_msgs mav_msgs nav_msgs roscpp sensor_msgs gazebo_msgs
+  DEPENDS Eigen
+)
+
+include_directories(
+  include
+  ${catkin_INCLUDE_DIRS}
+  ${Eigen_INCLUDE_DIRS}
+)
+
+add_executable(waypoint_publisher src/nodes/waypoint_publisher.cpp)
 target_link_libraries(waypoint_publisher ${catkin_LIBRARIES})
 add_dependencies(waypoint_publisher ${catkin_EXPORTED_TARGETS})
 
-add_executable(waypoint_publisher_file src/waypoint_publisher_file.cpp)
+add_executable(waypoint_publisher_file src/nodes/waypoint_publisher_file.cpp)
 target_link_libraries(waypoint_publisher_file ${catkin_LIBRARIES})
 add_dependencies(waypoint_publisher_file ${catkin_EXPORTED_TARGETS})
 
-add_executable(hovering_example src/hovering_example.cpp)
+add_executable(hovering_example src/nodes/hovering_example.cpp)
 target_link_libraries(hovering_example ${catkin_LIBRARIES})
 add_dependencies(hovering_example ${catkin_EXPORTED_TARGETS})
+
 
 foreach(dir launch models resource worlds)
    install(DIRECTORY ${dir}/
@@ -78,4 +93,10 @@ install(TARGETS waypoint_publisher waypoint_publisher_file hovering_example
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+install(
+  DIRECTORY include/${PROJECT_NAME}/
+  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+  FILES_MATCHING PATTERN "*.h"
 )
